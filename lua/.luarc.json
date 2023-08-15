@@ -1,0 +1,6 @@
+{
+    "diagnostics.globals": [
+        "vim",
+        "clean_opened_buffers"
+    ]
+}
