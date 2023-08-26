@@ -10,7 +10,7 @@ func TestSomething(t *testing.T) {
 }
 
 func TestSomething2(t *testing.T) {
-	a := "asdf"
+	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
