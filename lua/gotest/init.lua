@@ -7,11 +7,11 @@ M.setup = function(opts)
 end
 
 local opened = {}
+local last_window = 0
 
--- TODO: Calculate height of the windows so it's not more than 50% of the screen
-local function calculate_window_height(window, size)
+-- Calculate height of the windows so it's not more than 50% of the screen
+local function calculate_window_max_height(window, size)
 	local w_height = vim.api.nvim_win_get_height(window)
-	-- TODO handle nil cases, but why  data would be nil at this point?
 	local half_w_height = math.ceil(w_height / 2)
 
 	if size > half_w_height then
@@ -25,6 +25,7 @@ end
 
 local function open_testing_window_and_buf(name, maxHeight)
 	local curr_window = vim.api.nvim_get_current_win()
+	last_window = curr_window
 	local bufnr = vim.api.nvim_create_buf(true, true)
 	vim.cmd('botright split')
 	local new_window = vim.api.nvim_get_current_win()
@@ -33,7 +34,7 @@ local function open_testing_window_and_buf(name, maxHeight)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "running test now..." })
 	vim.api.nvim_buf_set_name(bufnr, name)
 
-	local height = calculate_window_height(curr_window, maxHeight)
+	local height = calculate_window_max_height(curr_window, maxHeight)
 	vim.api.nvim_win_set_height(new_window, height)
 
 	table.insert(opened, bufnr)
@@ -44,12 +45,16 @@ end
 local function print_on_stdout(data, bufnr)
 	if #data >= 1 then
 		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
+		local height = calculate_window_max_height(last_window, #data)
+		vim.api.nvim_win_set_height(0, height)
 	end
 end
 
 local function print_on_stderr(data, bufnr)
 	if #data >= 1 then
 		vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, data)
+		local height = calculate_window_max_height(last_window, #data)
+		vim.api.nvim_win_set_height(0, height * 2)
 	end
 end
 
@@ -61,18 +66,18 @@ local function clean_opened_buffers()
 end
 
 local function print_output_opts(name)
+	local _, bufnr = open_testing_window_and_buf(name, 10)
+
 	return {
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data)
 			if #data > 1 then
-				local _, bufnr = open_testing_window_and_buf(name, #data)
 				print_on_stdout(data, bufnr)
 			end
 		end,
 		on_stderr = function(_, data)
 			if #data > 1 then
-				local _, bufnr = open_testing_window_and_buf(name, #data)
 				print_on_stderr(data, bufnr)
 			end
 		end,
