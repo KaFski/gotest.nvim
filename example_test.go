@@ -2,11 +2,18 @@ package gotestnvim
 
 import "testing"
 
-func TestSomething(t *testing.T) {
+func TestSomethinga(t *testing.T) {
 	a := "asdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
+
+	t.Run("test 1", func(t *testing.T) {
+
+	})
+	t.Run("test 2", func(t *testing.T) {
+
+	})
 }
 
 func TestSomething2(t *testing.T) {

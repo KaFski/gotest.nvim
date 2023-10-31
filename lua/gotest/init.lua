@@ -42,19 +42,19 @@ local function open_testing_window_and_buf(name, maxHeight)
 	return new_window, bufnr
 end
 
-local function print_on_stdout(data, bufnr)
+local function print_on_stdout(data, bufnr, messages)
 	if #data >= 1 then
-		vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, data)
-		local height = calculate_window_max_height(last_window, #data)
-		vim.api.nvim_win_set_height(0, height)
+		for _, line in ipairs(data) do
+			table.insert(messages, line)
+		end
 	end
 end
 
-local function print_on_stderr(data, bufnr)
+local function print_on_stderr(data, bufnr, messages)
 	if #data >= 1 then
-		vim.api.nvim_buf_set_lines(bufnr, 0, 0, false, data)
-		local height = calculate_window_max_height(last_window, #data)
-		vim.api.nvim_win_set_height(0, height * 2)
+		for _, line in ipairs(data) do
+			table.insert(messages, line)
+		end
 	end
 end
 
@@ -67,20 +67,22 @@ end
 
 local function print_output_opts(name)
 	local _, bufnr = open_testing_window_and_buf(name, 10)
+	local messages = {}
 
 	return {
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data)
-			if #data > 1 then
-				print_on_stdout(data, bufnr)
-			end
+			print_on_stdout(data, bufnr, messages)
 		end,
 		on_stderr = function(_, data)
-			if #data > 1 then
-				print_on_stderr(data, bufnr)
-			end
+			print_on_stderr(data, bufnr, messages)
 		end,
+		on_exit = function()
+			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, messages)
+			local height = calculate_window_max_height(last_window, #messages)
+			vim.api.nvim_win_set_height(0, height)
+		end
 	}
 end
 
@@ -95,7 +97,7 @@ local function assembly_job_definition(opts, resource, ...)
 	table.insert(job_definition, resource)
 
 	local vararg = { ... }
-	for key, value in ipairs(vararg) do
+	for _, value in ipairs(vararg) do
 		table.insert(job_definition, value)
 	end
 
@@ -159,15 +161,11 @@ M.runTestUnderCursor = function(opts)
 	end
 
 	local job_definition = assembly_job_definition(opts, curr_package_name)
+	local job_definition_concat = table.concat(job_definition, " ") .. " -run='(" .. table.concat(tests, "|") .. ")'"
+	print("jobstart", job_definition_concat)
 
-	table.insert(job_definition, "-run")
-	for _, value in pairs(tests) do
-		table.insert(job_definition, value)
-	end
-
-	print("jobstart: ", table.unpack(job_definition))
 	vim.fn.jobstart(
-		job_definition,
+		job_definition_concat,
 		print_output_opts("GoTestFunction")
 	)
 end
@@ -191,9 +189,5 @@ end
 M.cleanup = function()
 	clean_opened_buffers()
 end
-
-
--- Probably I need to find go.mod file and extract module name for it, in order to run package test,
--- then I need to also add possiblility to specify which test I want to run with -run test flag.
 
 return M
