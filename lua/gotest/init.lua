@@ -8,8 +8,21 @@ end
 
 local opened = {}
 local last_window = 0
+local last_run_definiton = ""
+
+local function clean_opened_buffers()
+	for idx, buf in ipairs(opened) do
+		vim.api.nvim_buf_delete(buf, {})
+		table.remove(opened, idx)
+	end
+end
+
+---@class Opts
+---@field nonverbose boolean
 
 -- Calculate height of the windows so it's not more than 50% of the screen
+---@param window number
+---@param size number
 local function calculate_window_max_height(window, size)
 	local w_height = vim.api.nvim_win_get_height(window)
 	local half_w_height = math.ceil(w_height / 2)
@@ -23,6 +36,8 @@ local function calculate_window_max_height(window, size)
 	return size
 end
 
+---@param name string
+---@param maxHeight number
 local function open_testing_window_and_buf(name, maxHeight)
 	local curr_window = vim.api.nvim_get_current_win()
 	last_window = curr_window
@@ -42,7 +57,9 @@ local function open_testing_window_and_buf(name, maxHeight)
 	return new_window, bufnr
 end
 
-local function print_on_stdout(data, bufnr, messages)
+---@param data string[]
+---@param messages string[]
+local function print_on_stdout(data, messages)
 	if #data >= 1 then
 		for _, line in ipairs(data) do
 			table.insert(messages, line)
@@ -50,7 +67,9 @@ local function print_on_stdout(data, bufnr, messages)
 	end
 end
 
-local function print_on_stderr(data, bufnr, messages)
+---@param data string[]
+---@param messages string[]
+local function print_on_stderr(data, messages)
 	if #data >= 1 then
 		for _, line in ipairs(data) do
 			table.insert(messages, line)
@@ -58,13 +77,7 @@ local function print_on_stderr(data, bufnr, messages)
 	end
 end
 
-local function clean_opened_buffers()
-	for idx, buf in ipairs(opened) do
-		vim.api.nvim_buf_delete(buf, {})
-		table.remove(opened, idx)
-	end
-end
-
+---@param name string
 local function print_output_opts(name)
 	local _, bufnr = open_testing_window_and_buf(name, 10)
 	local messages = {}
@@ -73,10 +86,10 @@ local function print_output_opts(name)
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data)
-			print_on_stdout(data, bufnr, messages)
+			print_on_stdout(data, messages)
 		end,
 		on_stderr = function(_, data)
-			print_on_stderr(data, bufnr, messages)
+			print_on_stderr(data, messages)
 		end,
 		on_exit = function()
 			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, messages)
@@ -86,7 +99,9 @@ local function print_output_opts(name)
 	}
 end
 
-
+---@param opts Opts
+---@param resource string
+---@vararg string
 local function assembly_job_definition(opts, resource, ...)
 	local job_definition = { "go", "test" }
 
@@ -104,22 +119,7 @@ local function assembly_job_definition(opts, resource, ...)
 	return job_definition
 end
 
-M.runTestFile = function(opts)
-	opts = opts or {}
-	clean_opened_buffers()
-
-	local curr_buf_name = vim.api.nvim_buf_get_name(0)
-	local job_definition = assembly_job_definition(opts, curr_buf_name)
-
-	print("jobstart: ", table.unpack(job_definition))
-
-	vim.fn.jobstart(
-		job_definition,
-		print_output_opts("GoTestFile")
-	)
-end
-
-
+---@param opts Opts
 M.runTestPackage = function(opts)
 	opts = opts or {}
 	clean_opened_buffers()
@@ -137,7 +137,9 @@ M.runTestPackage = function(opts)
 end
 
 -- This requires some additional work
-M.runTestUnderCursor = function(opts)
+-- This is old runUnderCursor
+---@param opts Opts
+M.runTestFile = function(opts)
 	opts = opts or {}
 	clean_opened_buffers()
 
@@ -150,7 +152,6 @@ M.runTestUnderCursor = function(opts)
 		-- func TestAnswerServiceUnitSuite(t *testing.T) {
 		local _, _, captured = string.find(d, "func (Test.*)%(t %*testing%.T%) {")
 		if captured then
-			print("found a test function: ", captured)
 			table.insert(tests, captured)
 		end
 	end
@@ -164,12 +165,63 @@ M.runTestUnderCursor = function(opts)
 	local job_definition_concat = table.concat(job_definition, " ") .. " -run='(" .. table.concat(tests, "|") .. ")'"
 	print("jobstart", job_definition_concat)
 
+	last_run_definiton = job_definition_concat
+
+	vim.fn.jobstart(
+		job_definition_concat,
+		print_output_opts("GoTestFile")
+	)
+end
+
+M.runTestRerun = function()
+	clean_opened_buffers()
+
+	print("jobstart", last_run_definiton)
+
+	vim.fn.jobstart(
+		last_run_definiton,
+		print_output_opts("GoTestRerun")
+	)
+end
+
+
+M.runTestUnderCursor = function(opts)
+	opts = opts or {}
+	clean_opened_buffers()
+
+	local curr_buf_name = vim.api.nvim_buf_get_name(0)
+	local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
+	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+	local tests = {}
+	for line, d in ipairs(lines) do
+		if line == vim.api.nvim_win_get_cursor(0)[1] then
+			-- func TestAnswerServiceUnitSuite(t *testing.T) {
+			local _, _, captured = string.find(d, "func (Test.*)%(t %*testing%.T%) {")
+			if captured then
+				table.insert(tests, captured)
+			end
+		end
+	end
+
+	if next(tests) == nil then
+		print("no tests found")
+		return
+	end
+
+	local job_definition = assembly_job_definition(opts, curr_package_name)
+	local job_definition_concat = table.concat(job_definition, " ") .. " -run='(" .. table.concat(tests, "|") .. ")'"
+	print("jobstart", job_definition_concat)
+
+	last_run_definiton = job_definition_concat
+
 	vim.fn.jobstart(
 		job_definition_concat,
 		print_output_opts("GoTestFunction")
 	)
 end
 
+---@param opts Opts
 M.runTestJson = function(opts)
 	opts = opts or {}
 	clean_opened_buffers()
@@ -182,7 +234,7 @@ M.runTestJson = function(opts)
 
 	vim.fn.jobstart(
 		job_definition,
-		print_output_opts("GoTestPackageJson")
+		print_output_opts("GoTestJson")
 	)
 end
 

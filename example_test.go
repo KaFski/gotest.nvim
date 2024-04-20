@@ -16,66 +16,56 @@ func TestSomethinga(t *testing.T) {
 	})
 }
 
-func TestSomething2(t *testing.T) {
+func TestAnother(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
 
-func TestSomething3(t *testing.T) {
+func TestYetAnother(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
 
-func TestSomething4(t *testing.T) {
+func TestThis(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
 
-func TestSomething5(t *testing.T) {
+func TestThat(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
 
-func TestSomething6(t *testing.T) {
+func TestMe(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
 
-func TestSomething7(t *testing.T) {
+func TestYou(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
+
 func TestSomething8(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
 }
+
 func TestSomething9(t *testing.T) {
-	a := "sdf"
-	if a[0] != 'a' {
-		t.Errorf("expected %q, but got %q instead", 'a', a[0])
-	}
-}
-func TestSomething10(t *testing.T) {
-	a := "sdf"
-	if a[0] != 'a' {
-		t.Errorf("expected %q, but got %q instead", 'a', a[0])
-	}
-}
-func TestSomething11(t *testing.T) {
 	a := "sdf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
