@@ -5,13 +5,18 @@ M.setup = function(opts)
 end
 
 local outer_buffer = 0
-local test_buffers = {}
+local test_buffer = {
+	id = -1
+}
+local test_window = {
+	id = -1,
+	cfg = {}
+}
 local last_run_definiton = ""
 
 local function clean_opened_buffers()
-	for idx, buf in ipairs(test_buffers) do
-		vim.api.nvim_buf_delete(buf, {})
-		table.remove(test_buffers, idx)
+	if vim.api.nvim_buf_is_valid(test_buffer.id) then
+		vim.api.nvim_buf_delete(test_buffer.id, { force = true })
 	end
 end
 
@@ -24,6 +29,21 @@ local function find_in_patterns(line, patterns)
 	end
 
 	return nil
+end
+
+local function test_toggle_window()
+	if vim.api.nvim_win_is_valid(test_window.id) and test_window.id ~= 0 then
+		test_window.cfg = vim.api.nvim_win_get_config(test_window.id)
+		vim.api.nvim_win_close(test_window.id, true)
+		return
+	end
+
+	if vim.api.nvim_buf_is_valid(test_buffer.id) then
+		test_window.id = vim.api.nvim_open_win(test_buffer.id, true, test_window.cfg)
+		return
+	end
+
+	print("no test window to toggle")
 end
 
 local function go_to_test()
@@ -48,7 +68,7 @@ local function go_to_test()
 
 		for row, content in ipairs(lines) do
 			if content:find("func " .. test .. "%(") then
-				clean_opened_buffers()
+				test_toggle_window()
 				vim.api.nvim_win_set_cursor(0, { row, 0 })
 				return
 			end
@@ -65,7 +85,7 @@ local function go_to_test()
 		return
 	end
 
-	clean_opened_buffers()
+	test_toggle_window()
 
 	vim.api.nvim_win_set_cursor(0, { row, 0 })
 end
@@ -91,6 +111,8 @@ end
 ---@param name string
 ---@param maxHeight number
 local function open_testing_window_and_buf(name, maxHeight)
+	local height = calculate_window_max_height(maxHeight)
+
 	outer_buffer = vim.api.nvim_get_current_buf()
 	local bufnr = vim.api.nvim_create_buf(true, true)
 	local new_window = vim.api.nvim_open_win(bufnr, true, {
@@ -98,7 +120,7 @@ local function open_testing_window_and_buf(name, maxHeight)
 		row = vim.o.lines,
 		col = vim.o.columns * 0.1,
 		width = math.floor(vim.o.columns * 0.8),
-		height = vim.o.lines - 10,
+		height = height,
 		border = "single",
 		style = "minimal",
 	})
@@ -109,10 +131,8 @@ local function open_testing_window_and_buf(name, maxHeight)
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "running test now..." })
 	vim.api.nvim_buf_set_name(bufnr, name)
 
-	local height = calculate_window_max_height(maxHeight)
-	vim.api.nvim_win_set_height(new_window, height)
-
-	table.insert(test_buffers, bufnr)
+	test_buffer.id = bufnr
+	test_window.id = new_window
 
 	return new_window, bufnr
 end
@@ -302,6 +322,7 @@ M.runTestJson = function(opts)
 	)
 end
 
+
 M.cleanup = function()
 	clean_opened_buffers()
 end
@@ -311,5 +332,6 @@ vim.keymap.set('n', '<leader>tp', M.runTestPackage, { desc = 'Run [T]est [P]acka
 vim.keymap.set('n', '<leader>tc', M.runTestUnderCursor, { desc = 'Run [T]est under [C]ursor ' })
 vim.keymap.set('n', '<leader>tj', M.runTestJson, { desc = 'Run [T]est [J]SON' })
 vim.keymap.set('n', '<leader>tr', M.runTestRerun, { desc = 'Run [T]est [R]erun' })
+vim.keymap.set('n', '<leader>tt', test_toggle_window, { desc = '[T]est [T]oggle' })
 
 return M
