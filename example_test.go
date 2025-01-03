@@ -45,7 +45,7 @@ func TestThat(t *testing.T) {
 }
 
 func TestMe(t *testing.T) {
-	a := "sdf"
+	a := "adf"
 	if a[0] != 'a' {
 		t.Errorf("expected %q, but got %q instead", 'a', a[0])
 	}
