@@ -14,7 +14,7 @@ vim.keymap.set('n', '<leader>tt', test_toggle_window, { desc = '[T]est [T]oggle 
 
 When test floating widnos is opened, you can use the following keymaps to close floating window navigate to test:
 ```lua
-	vim.keymap.set('n', 'q', clean_opened_buffers, { buffer = bufnr })
-	vim.keymap.set('n', 'x', go_to_test, { buffer = bufnr })
+vim.keymap.set('n', 'q', clean_opened_buffers, { buffer = bufnr })
+vim.keymap.set('n', 'x', go_to_test, { buffer = bufnr })
 ```
 
