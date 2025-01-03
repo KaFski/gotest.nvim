@@ -218,7 +218,6 @@ local function print_output_opts(name)
 		end,
 		on_exit = function()
 			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, messages)
-			print("messages before place sings", messages)
 			place_signs(messages)
 
 			local height = calculate_window_max_height(#messages)
