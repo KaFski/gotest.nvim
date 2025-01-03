@@ -9,7 +9,7 @@ vim.keymap.set('n', '<leader>tp', M.runTestPackage, { desc = 'Run [T]est [P]acka
 vim.keymap.set('n', '<leader>tc', M.runTestUnderCursor, { desc = 'Run [T]est under [C]ursor ' })
 vim.keymap.set('n', '<leader>tj', M.runTestJson, { desc = 'Run [T]est [J]SON' })
 vim.keymap.set('n', '<leader>tr', M.runTestRerun, { desc = 'Run [T]est [R]erun' })
-vim.keymap.set('n', '<leader>tt', test_toggle_window, { desc = '[T]est [T]oggle Window' })
+vim.keymap.set('n', '<C-t>', test_toggle_window, { desc = '[T]est [T]oggle Window' })
 ```
 
 When test floating widnos is opened, you can use the following keymaps to close floating window navigate to test:
