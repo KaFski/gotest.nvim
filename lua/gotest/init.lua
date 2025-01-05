@@ -1,3 +1,4 @@
+local sign = require("gotest.sign")
 local M = {}
 
 table.unpack = table.unpack or unpack
@@ -6,27 +7,10 @@ M.setup = function(opts)
 	print("Options:", opts)
 end
 
--- Define a unique sign name
-local pass = "PASS"
-local fail = "FAIL"
-
-vim.fn.sign_define(pass, {
-	text = "✓", -- The tick symbol
-	texthl = "GreenTickHighlight", -- Highlight group for the tick
-	numhl = "", -- No number column highlight
-})
-vim.api.nvim_set_hl(0, "GreenTickHighlight", { fg = "#33CC33" })
-
-vim.fn.sign_define(fail, {
-	text = "x",                -- The tick symbol
-	texthl = "RedCrossHighlight", -- Highlight group for the tick
-	numhl = "",                -- No number column highlight
-})
-vim.api.nvim_set_hl(0, "RedCrossHighlight", { fg = "#CC3333" })
-
 local outer_buffer = 0
 local test_buffer = {
-	id = -1
+	id = -1,
+	lines = {}
 }
 local test_window = {
 	id = -1,
@@ -55,7 +39,7 @@ local function find_in_patterns(line, patterns)
 	return nil
 end
 
-local function test_toggle_window()
+local function toggle_test_window()
 	if vim.api.nvim_win_is_valid(test_window.id) and test_window.id ~= 0 then
 		test_window.cfg = vim.api.nvim_win_get_config(test_window.id)
 		vim.api.nvim_win_close(test_window.id, true)
@@ -68,6 +52,57 @@ local function test_toggle_window()
 	end
 
 	print("no test window to toggle")
+end
+
+local function toggle_summary()
+	local bufnr = vim.api.nvim_create_buf(true, true)
+	local new_window = vim.api.nvim_open_win(bufnr, true, {
+		relative = "editor",
+		row = vim.o.lines,
+		col = vim.o.columns * 0.1,
+		width = math.floor(vim.o.columns * 0.8),
+		height = 8,
+		border = "single",
+		style = "minimal",
+	})
+
+	vim.keymap.set('n', 's', function() vim.api.nvim_win_close(new_window, true) end, { buffer = bufnr })
+	vim.keymap.set('n', 'q', function() vim.api.nvim_win_close(new_window, true) end, { buffer = bufnr })
+
+	local test_summary = {
+		tests = {},
+		passes = {},
+		fails = {},
+	}
+	for _, line in ipairs(test_buffer.lines) do
+		local action, test = find_in_patterns(line, {
+			"=== (RUN)   (Test.*)",
+			"--- (FAIL): (Test.*) ",
+			"--- (PASS): (Test.*) "
+		})
+		if action == "RUN" then
+			table.insert(test_summary.tests, test)
+		end
+		if action == "FAIL" then
+			table.insert(test_summary.fails, test)
+		end
+		if action == "PASS" then
+			table.insert(test_summary.passes, test)
+		end
+	end
+
+	local output = {
+		string.format("Executed %d tests", #test_summary.tests),
+		string.format("\t%d / %d passed ", #test_summary.passes, #test_summary.tests),
+		string.format("\t%d / %d failed ", #test_summary.fails, #test_summary.tests),
+	}
+
+	for _, test in ipairs(test_summary.fails) do
+		table.insert(output, string.format("\t ⨯ %s", test))
+	end
+
+
+	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, output)
 end
 
 local function go_to_test()
@@ -91,7 +126,7 @@ local function go_to_test()
 
 		for row, content in ipairs(lines) do
 			if content:find("func " .. test .. "%(") then
-				test_toggle_window()
+				toggle_test_window()
 				vim.api.nvim_win_set_cursor(0, { row, 0 })
 				return
 			end
@@ -108,7 +143,7 @@ local function go_to_test()
 		return
 	end
 
-	test_toggle_window()
+	toggle_test_window()
 
 	vim.api.nvim_win_set_cursor(0, { row, 0 })
 end
@@ -150,6 +185,7 @@ local function open_testing_window_and_buf(name, maxHeight)
 
 	vim.keymap.set('n', 'q', clean_opened_buffers, { buffer = bufnr })
 	vim.keymap.set('n', 'x', go_to_test, { buffer = bufnr })
+	vim.keymap.set('n', 's', toggle_summary, { buffer = bufnr })
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "running test now..." })
 	vim.api.nvim_buf_set_name(bufnr, name)
@@ -163,7 +199,7 @@ end
 ---@param data string[]
 ---@param messages string[]
 local function append_to_messages(data, messages)
-	if #data >= 1 then
+	if #data > 1 then
 		for _, line in ipairs(data) do
 			table.insert(messages, line)
 		end
@@ -171,17 +207,14 @@ local function append_to_messages(data, messages)
 end
 
 local function place_sign_column(line, result)
-	print("place sign", line, result)
-	-- Place the sign on the specified line
-	vim.fn.sign_place(0, "TickSignsGroup", result, outer_buffer, {
-		lnum = line, -- Line number where the tick should appear
-		priority = 10, -- Priority for display (higher = displayed on top)
+	vim.fn.sign_place(0, sign.group, result, outer_buffer, {
+		lnum = line,
+		priority = 10,
 	})
 end
 
 local function clear_all_signs()
-	-- Unplace all signs from the group "TickSignsGroup" in all buffers
-	vim.fn.sign_unplace("TickSignsGroup")
+	vim.fn.sign_unplace(sign.group)
 end
 
 local function place_signs(lines)
@@ -191,7 +224,6 @@ local function place_signs(lines)
 
 	for _, line in ipairs(lines) do
 		local result, test = find_in_patterns(line, { "--- (PASS): (Test.*) ", "--- (FAIL): (Test.*) " })
-		print("result: ", result, "test: ", test)
 		for row, content in ipairs(test_file_lines) do
 			if test then
 				if content:find("func " .. test .. "%(") then
@@ -205,22 +237,23 @@ end
 ---@param name string
 local function print_output_opts(name)
 	local _, bufnr = open_testing_window_and_buf(name, 10)
-	local messages = {}
+	local test_output = {}
 
 	return {
 		stdout_buffered = true,
 		stderr_buffered = true,
 		on_stdout = function(_, data)
-			append_to_messages(data, messages)
+			append_to_messages(data, test_output)
 		end,
 		on_stderr = function(_, data)
-			append_to_messages(data, messages)
+			append_to_messages(data, test_output)
 		end,
 		on_exit = function()
-			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, messages)
-			place_signs(messages)
+			vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, test_output)
+			test_buffer.lines = test_output
+			place_signs(test_buffer.lines)
 
-			local height = calculate_window_max_height(#messages)
+			local height = calculate_window_max_height(#test_output)
 			vim.api.nvim_win_set_height(0, height)
 			vim.bo[bufnr].modifiable = false
 		end
@@ -389,6 +422,6 @@ vim.keymap.set('n', '<leader>tp', M.run_test_package, { desc = 'Run [T]est [P]ac
 vim.keymap.set('n', '<leader>tc', M.run_test_under_cursor, { desc = 'Run [T]est under [C]ursor ' })
 vim.keymap.set('n', '<leader>tj', M.run_test_json, { desc = 'Run [T]est [J]SON' })
 vim.keymap.set('n', '<leader>tr', M.run_test_rerun, { desc = 'Run [T]est [R]erun' })
-vim.keymap.set('n', '<C-t>', test_toggle_window, { desc = '[T]est [T]oggle Window' })
+vim.keymap.set('n', '<C-t>', toggle_test_window, { desc = '[T]est [T]oggle Window' })
 
 return M
