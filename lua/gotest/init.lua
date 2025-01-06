@@ -18,7 +18,6 @@ local test_window = {
 }
 local last_run_definiton = ""
 
-
 local function clean_opened_buffers()
 	if vim.api.nvim_buf_is_valid(test_buffer.id) then
 		vim.api.nvim_buf_delete(test_buffer.id, { force = true })
@@ -101,8 +100,8 @@ local function toggle_summary()
 		table.insert(output, string.format("\t ⨯ %s", test))
 	end
 
-
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, output)
+	vim.bo[bufnr].modifiable = false
 end
 
 local function go_to_test()
@@ -148,6 +147,43 @@ local function go_to_test()
 	vim.api.nvim_win_set_cursor(0, { row, 0 })
 end
 
+local function next_failure()
+	-- === RUN   TestAnother
+	--     example_test.go:22: expected 'a', but got 's' instead
+	-- --- FAIL: TestAnother (0.00s)
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	for i = row + 1, #test_buffer.lines do
+		local test = find_in_patterns(test_buffer.lines[i], {
+			"--- FAIL: (Test.*) ",
+		})
+
+		if test ~= nil then
+			vim.api.nvim_win_set_cursor(0, { i, 0 })
+			return
+		end
+	end
+
+	print("no more failures")
+end
+
+local function prev_failure()
+	-- === RUN   TestAnother
+	--     example_test.go:22: expected 'a', but got 's' instead
+	-- --- FAIL: TestAnother (0.00s)
+	local row = vim.api.nvim_win_get_cursor(0)[1]
+	for i = row - 1, 1, -1 do
+		local test = find_in_patterns(test_buffer.lines[i], {
+			"--- FAIL: (Test.*) ",
+		})
+
+		if test ~= nil then
+			vim.api.nvim_win_set_cursor(0, { i, 0 })
+			return
+		end
+	end
+
+	print("no previous failures")
+end
 
 ---@class Opts
 ---@field nonverbose boolean
@@ -186,6 +222,8 @@ local function open_testing_window_and_buf(name, maxHeight)
 	vim.keymap.set('n', 'q', clean_opened_buffers, { buffer = bufnr })
 	vim.keymap.set('n', 'x', go_to_test, { buffer = bufnr })
 	vim.keymap.set('n', 's', toggle_summary, { buffer = bufnr })
+	vim.keymap.set('n', 'n', next_failure, { buffer = bufnr })
+	vim.keymap.set('n', 'p', prev_failure, { buffer = bufnr })
 
 	vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "running test now..." })
 	vim.api.nvim_buf_set_name(bufnr, name)
