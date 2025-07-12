@@ -302,7 +302,7 @@ end
 ---@param resource string
 ---@vararg string
 local function assembly_job_definition(opts, resource, ...)
-  local job_definition = { "go", "test" }
+  local job_definition = { "go", "test", "-count=1", "-timeout=30s" }
 
   if not opts.nonverbose then
     table.insert(job_definition, "-v")
