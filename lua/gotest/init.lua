@@ -225,7 +225,6 @@ local function open_testing_window_and_buf(name, maxHeight)
   vim.keymap.set('n', 'n', next_failure, { buffer = bufnr })
   vim.keymap.set('n', 'p', prev_failure, { buffer = bufnr })
 
-  vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { "running test now..." })
   vim.api.nvim_buf_set_name(bufnr, name)
 
   test_buffer.id = bufnr
@@ -242,6 +241,20 @@ local function append_to_messages(data, messages)
       table.insert(messages, line)
     end
   end
+end
+
+---@param bufnr integer
+---@param lines string[]
+local function append(bufnr, lines)
+  for i, _ in ipairs(lines) do
+    if lines[i] == "" or not lines[i]:match("%S") then
+      table.remove(lines, i)
+    end
+  end
+
+  if not lines then return end
+
+  vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, lines)
 end
 
 local function place_sign_column(line, result)
@@ -278,16 +291,17 @@ local function print_output_opts(name)
   local test_output = {}
 
   return {
-    stdout_buffered = true,
-    stderr_buffered = true,
+    stdout_buffered = false,
+    stderr_buffered = false,
     on_stdout = function(_, data)
+      append(bufnr, data)
       append_to_messages(data, test_output)
     end,
     on_stderr = function(_, data)
+      append(bufnr, data)
       append_to_messages(data, test_output)
     end,
     on_exit = function()
-      vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, test_output)
       test_buffer.lines = test_output
       place_signs(test_buffer.lines)
 
@@ -332,6 +346,21 @@ local function scan_tests(lines)
   end
 
   return tests
+end
+
+---@param opts Opts
+M.run_test_all = function(opts)
+  opts = opts or {}
+  clean_opened_buffers()
+
+  local job_definition = assembly_job_definition(opts, "./...")
+
+  print("jobstart: ", table.unpack(job_definition))
+
+  vim.fn.jobstart(
+    job_definition,
+    print_output_opts("GoTestAll")
+  )
 end
 
 
@@ -460,6 +489,7 @@ vim.keymap.set('n', '<leader>tp', M.run_test_package, { desc = 'Run [T]est [P]ac
 vim.keymap.set('n', '<leader>tc', M.run_test_under_cursor, { desc = 'Run [T]est under [C]ursor ' })
 vim.keymap.set('n', '<leader>tj', M.run_test_json, { desc = 'Run [T]est [J]SON' })
 vim.keymap.set('n', '<leader>tr', M.run_test_rerun, { desc = 'Run [T]est [R]erun' })
+vim.keymap.set('n', '<leader>ta', M.run_test_all, { desc = 'Run [T]est [A]ll' })
 vim.keymap.set('n', '<C-t>', toggle_test_window, { desc = '[T]est [T]oggle Window' })
 
 return M
