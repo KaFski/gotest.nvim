@@ -233,16 +233,6 @@ local function open_testing_window_and_buf(name, maxHeight)
   return new_window, bufnr
 end
 
----@param data string[]
----@param messages string[]
-local function append_to_messages(data, messages)
-  if #data > 1 then
-    for _, line in ipairs(data) do
-      table.insert(messages, line)
-    end
-  end
-end
-
 ---@param bufnr integer
 ---@param lines string[]
 local function append(bufnr, lines)
@@ -255,6 +245,17 @@ local function append(bufnr, lines)
   if not lines then return end
 
   vim.api.nvim_buf_set_lines(bufnr, -1, -1, false, lines)
+
+  -- optional autoscroll:
+  local last = vim.api.nvim_buf_line_count(bufnr)
+  vim.api.nvim_win_set_cursor(0, { last, 0 })
+
+  for _, line in ipairs(lines) do
+    table.insert(test_buffer.lines, line)
+  end
+
+  local height = calculate_window_max_height(#test_buffer.lines)
+  vim.api.nvim_win_set_height(0, height)
 end
 
 local function place_sign_column(line, result)
@@ -288,25 +289,22 @@ end
 ---@param name string
 local function print_output_opts(name)
   local _, bufnr = open_testing_window_and_buf(name, 10)
-  local test_output = {}
 
   return {
     stdout_buffered = false,
     stderr_buffered = false,
     on_stdout = function(_, data)
       append(bufnr, data)
-      append_to_messages(data, test_output)
     end,
     on_stderr = function(_, data)
       append(bufnr, data)
-      append_to_messages(data, test_output)
     end,
     on_exit = function()
-      test_buffer.lines = test_output
       place_signs(test_buffer.lines)
 
-      local height = calculate_window_max_height(#test_output)
-      vim.api.nvim_win_set_height(0, height)
+      -- Clear first buffer emplty line
+      vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, {})
+
       vim.bo[bufnr].modifiable = false
     end
   }
