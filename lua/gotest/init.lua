@@ -1,4 +1,5 @@
 local sign = require("gotest.sign")
+local ui = require("gotest.ui")
 local M = {}
 
 table.unpack = table.unpack or unpack
@@ -8,21 +9,7 @@ M.setup = function(opts)
 end
 
 local outer_buffer = 0
-local test_buffer = {
-  id = -1,
-  lines = {}
-}
-local test_window = {
-  id = -1,
-  cfg = {}
-}
 local last_run_definiton = ""
-
-local function clean_opened_buffers()
-  if vim.api.nvim_buf_is_valid(test_buffer.id) then
-    vim.api.nvim_buf_delete(test_buffer.id, { force = true })
-  end
-end
 
 ---@param line string
 ---@param patterns string[]
@@ -36,21 +23,6 @@ local function find_in_patterns(line, patterns)
   end
 
   return nil
-end
-
-local function toggle_test_window()
-  if vim.api.nvim_win_is_valid(test_window.id) and test_window.id ~= 0 then
-    test_window.cfg = vim.api.nvim_win_get_config(test_window.id)
-    vim.api.nvim_win_close(test_window.id, true)
-    return
-  end
-
-  if vim.api.nvim_buf_is_valid(test_buffer.id) then
-    test_window.id = vim.api.nvim_open_win(test_buffer.id, true, test_window.cfg)
-    return
-  end
-
-  print("no test window to toggle")
 end
 
 local function toggle_summary()
@@ -73,7 +45,9 @@ local function toggle_summary()
     passes = {},
     fails = {},
   }
-  for _, line in ipairs(test_buffer.lines) do
+
+  -- TODO: feels like test_buffer.lines should be moved to some state manager
+  for _, line in ipairs(ui.test_buffer.lines) do
     local action, test = find_in_patterns(line, {
       "=== (RUN)   (Test.*)",
       "--- (FAIL): (Test.*) ",
@@ -125,7 +99,7 @@ local function go_to_test()
 
     for row, content in ipairs(lines) do
       if content:find("func " .. test .. "%(") then
-        toggle_test_window()
+        ui.toggle_test_window()
         vim.api.nvim_win_set_cursor(0, { row, 0 })
         return
       end
@@ -142,7 +116,7 @@ local function go_to_test()
     return
   end
 
-  toggle_test_window()
+  ui.toggle_test_window()
 
   vim.api.nvim_win_set_cursor(0, { row, 0 })
 end
@@ -152,8 +126,8 @@ local function next_failure()
   --     example_test.go:22: expected 'a', but got 's' instead
   -- --- FAIL: TestAnother (0.00s)
   local row = vim.api.nvim_win_get_cursor(0)[1]
-  for i = row + 1, #test_buffer.lines do
-    local test = find_in_patterns(test_buffer.lines[i], {
+  for i = row + 1, #ui.test_buffer.lines do
+    local test = find_in_patterns(ui.test_buffer.lines[i], {
       "--- FAIL: (Test.*) ",
     })
 
@@ -172,7 +146,7 @@ local function prev_failure()
   -- --- FAIL: TestAnother (0.00s)
   local row = vim.api.nvim_win_get_cursor(0)[1]
   for i = row - 1, 1, -1 do
-    local test = find_in_patterns(test_buffer.lines[i], {
+    local test = find_in_patterns(ui.test_buffer.lines[i], {
       "--- FAIL: (Test.*) ",
     })
 
@@ -188,24 +162,12 @@ end
 ---@class Opts
 ---@field nonverbose boolean
 
--- Calculate height of the windows so it's not more than 50% of the screen
----@param rows number
-local function calculate_window_max_height(rows)
-  local height = math.ceil(vim.o.lines / 2)
 
-  if rows > height then
-    return height
-  elseif rows < 5 then
-    return 5
-  end
-
-  return rows
-end
-
+-- UI package state
 ---@param name string
 ---@param maxHeight number
 local function open_testing_window_and_buf(name, maxHeight)
-  local height = calculate_window_max_height(maxHeight)
+  local height = ui.calculate_window_max_height(maxHeight)
 
   outer_buffer = vim.api.nvim_get_current_buf()
   local bufnr = vim.api.nvim_create_buf(true, true)
@@ -219,7 +181,7 @@ local function open_testing_window_and_buf(name, maxHeight)
     style = "minimal",
   })
 
-  vim.keymap.set('n', 'q', clean_opened_buffers, { buffer = bufnr })
+  vim.keymap.set('n', 'q', ui.clean_opened_buffers, { buffer = bufnr })
   vim.keymap.set('n', 'x', go_to_test, { buffer = bufnr })
   vim.keymap.set('n', 's', toggle_summary, { buffer = bufnr })
   vim.keymap.set('n', 'n', next_failure, { buffer = bufnr })
@@ -227,8 +189,8 @@ local function open_testing_window_and_buf(name, maxHeight)
 
   vim.api.nvim_buf_set_name(bufnr, name)
 
-  test_buffer.id = bufnr
-  test_window.id = new_window
+  ui.test_buffer.id = bufnr
+  ui.test_window.id = new_window
 
   return new_window, bufnr
 end
@@ -251,10 +213,10 @@ local function append(bufnr, lines)
   vim.api.nvim_win_set_cursor(0, { last, 0 })
 
   for _, line in ipairs(lines) do
-    table.insert(test_buffer.lines, line)
+    table.insert(ui.test_buffer.lines, line)
   end
 
-  local height = calculate_window_max_height(#test_buffer.lines)
+  local height = ui.calculate_window_max_height(#ui.test_buffer.lines)
   vim.api.nvim_win_set_height(0, height)
 end
 
@@ -300,7 +262,7 @@ local function print_output_opts(name)
       append(bufnr, data)
     end,
     on_exit = function()
-      place_signs(test_buffer.lines)
+      place_signs(ui.test_buffer.lines)
 
       -- Clear first buffer emplty line
       vim.api.nvim_buf_set_lines(bufnr, 0, 1, false, {})
@@ -349,7 +311,7 @@ end
 ---@param opts Opts
 M.run_test_all = function(opts)
   opts = opts or {}
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   local job_definition = assembly_job_definition(opts, "./...")
 
@@ -365,7 +327,7 @@ end
 ---@param opts Opts
 M.run_test_package = function(opts)
   opts = opts or {}
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   local curr_buf_name = vim.api.nvim_buf_get_name(0)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
@@ -384,7 +346,7 @@ end
 ---@param opts Opts
 M.run_test_file = function(opts)
   opts = opts or {}
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   local curr_buf_name = vim.api.nvim_buf_get_name(0)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
@@ -414,7 +376,7 @@ M.run_test_file = function(opts)
 end
 
 M.run_test_rerun = function()
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   print("jobstart", last_run_definiton)
 
@@ -427,7 +389,7 @@ end
 
 M.run_test_under_cursor = function(opts)
   opts = opts or {}
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   local curr_buf_name = vim.api.nvim_buf_get_name(0)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
@@ -463,7 +425,7 @@ end
 ---@param opts Opts
 M.run_test_json = function(opts)
   opts = opts or {}
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 
   local curr_buf_name = vim.api.nvim_buf_get_name(0)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
@@ -479,7 +441,7 @@ end
 
 
 M.cleanup = function()
-  clean_opened_buffers()
+  ui.clean_opened_buffers()
 end
 
 vim.keymap.set('n', '<leader>tf', M.run_test_file, { desc = "Run [T]est [F]ile" })
@@ -488,6 +450,6 @@ vim.keymap.set('n', '<leader>tc', M.run_test_under_cursor, { desc = 'Run [T]est 
 vim.keymap.set('n', '<leader>tj', M.run_test_json, { desc = 'Run [T]est [J]SON' })
 vim.keymap.set('n', '<leader>tr', M.run_test_rerun, { desc = 'Run [T]est [R]erun' })
 vim.keymap.set('n', '<leader>ta', M.run_test_all, { desc = 'Run [T]est [A]ll' })
-vim.keymap.set('n', '<C-t>', toggle_test_window, { desc = '[T]est [T]oggle Window' })
+vim.keymap.set('n', '<C-t>', ui.toggle_test_window, { desc = '[T]est [T]oggle Window' })
 
 return M
