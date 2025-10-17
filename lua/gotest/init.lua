@@ -1,5 +1,6 @@
 local sign = require("gotest.sign")
 local ui = require("gotest.ui")
+local scanner = require("gotest.scan")
 local M = {}
 
 table.unpack = table.unpack or unpack
@@ -292,22 +293,6 @@ local function assembly_job_definition(opts, resource, ...)
   return job_definition
 end
 
----@param lines string[]
----@return string[]: list of scanned tests
-local function scan_tests(lines)
-  local tests = {}
-
-  for line, d in ipairs(lines) do
-    -- func TestAnswerServiceUnitSuite(t *testing.T) {
-    local _, _, captured = string.find(d, "func (Test.*)%(t %*testing%.T%) {")
-    if captured then
-      table.insert(tests, line, captured)
-    end
-  end
-
-  return tests
-end
-
 ---@param opts Opts
 M.run_test_all = function(opts)
   opts = opts or {}
@@ -352,7 +337,7 @@ M.run_test_file = function(opts)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
 
-  local tests = scan_tests(lines)
+  local tests = scanner.scan_tests(lines)
   if next(tests) == nil then
     print("no tests found")
     return
@@ -395,7 +380,7 @@ M.run_test_under_cursor = function(opts)
   local _, _, curr_package_name = string.find(curr_buf_name, "(.*)/.*")
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
 
-  local tests = scan_tests(lines)
+  local tests = scanner.scan_tests(lines)
   if next(tests) == nil then
     print("no tests found")
     return
@@ -411,7 +396,7 @@ M.run_test_under_cursor = function(opts)
   end
 
   local job_definition = assembly_job_definition(opts, curr_package_name)
-  local job = table.concat(job_definition, " ") .. " -run='(" .. test.name .. ")'"
+  local job = table.concat(job_definition, " ") .. " -run='" .. test.name .. "'"
   print("jobstart", job)
 
   last_run_definiton = job
