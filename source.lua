@@ -1,9 +1,9 @@
-gotest = package.loaded['gotest']
+gotest = package.loaded["gotest"]
 gotest.cleanup()
-package.loaded['gotest'] = nil
-package.loaded['gotest.sign'] = nil
-package.loaded['gotest.ui'] = nil
-package.loaded['gotest.scan'] = nil
+package.loaded["gotest"] = nil
+package.loaded["gotest.sign"] = nil
+package.loaded["gotest.ui"] = nil
+package.loaded["gotest.scan"] = nil
 
-require('gotest')
+require("gotest").setup()
 print("loaded gotest")

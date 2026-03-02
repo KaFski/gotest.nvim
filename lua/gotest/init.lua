@@ -5,8 +5,51 @@ local M = {}
 
 table.unpack = table.unpack or unpack
 
+local settings_buffer = 0
+local augroup = vim.api.nvim_create_augroup("GoTestAugroup", { clear = true })
+
 M.setup = function(opts)
 	print("Options:", opts)
+
+	settings_buffer = vim.fn.bufnr("GoTest Settings", false)
+	if settings_buffer == -1 then
+		settings_buffer = vim.api.nvim_create_buf(false, true)
+		vim.api.nvim_buf_set_name(settings_buffer, "GoTest Settings")
+	end
+
+	vim.bo[settings_buffer].buftype = "acwrite"
+	vim.bo[settings_buffer].bufhidden = "hide"
+	vim.bo[settings_buffer].swapfile = false
+	vim.bo[settings_buffer].modifiable = true
+	vim.bo[settings_buffer].filetype = "myplugin"
+
+	vim.b[settings_buffer].command_flags = {
+		"go",
+		"test",
+		"-count=1",
+		"-timeout=30s",
+		-- "-race",
+	}
+	vim.api.nvim_buf_set_lines(settings_buffer, 0, -1, false, vim.b[settings_buffer].command_flags)
+
+	M.setup_autocmds()
+end
+
+-- Set up autocmd to update the value when user writes the buffer.
+-- Call this once from your plugin setup.
+function M.setup_autocmds()
+	vim.api.nvim_create_autocmd("BufWriteCmd", {
+		group = augroup,
+		buffer = settings_buffer,
+		callback = function(args)
+			-- You can filter to only your plugin's special buffer(s) here if desired.
+			-- e.g., if vim.bo[args.buf].filetype ~= "myplugin" then return end
+
+			local cmd = vim.api.nvim_buf_get_lines(args.buf, 0, -1, false)
+			vim.b[settings_buffer].command_flags = cmd
+			vim.api.nvim_buf_set_option(args.buf, "modified", false)
+		end,
+	})
 end
 
 local outer_buffer = 0
@@ -25,6 +68,18 @@ local function find_in_patterns(line, patterns)
 	end
 
 	return nil
+end
+
+local function toggle_command_flags()
+	local new_window = vim.api.nvim_open_win(settings_buffer, true, {
+		relative = "editor",
+		row = vim.o.lines,
+		col = vim.o.columns * 0.1,
+		width = math.floor(vim.o.columns * 0.8),
+		height = 8,
+		border = "single",
+		style = "minimal",
+	})
 end
 
 local function toggle_summary()
@@ -195,6 +250,7 @@ local function open_testing_window_and_buf(name, maxHeight)
 	vim.keymap.set("n", "s", toggle_summary, { buffer = bufnr })
 	vim.keymap.set("n", "n", next_failure, { buffer = bufnr })
 	vim.keymap.set("n", "p", prev_failure, { buffer = bufnr })
+	vim.keymap.set("n", "c", toggle_command_flags, { buffer = bufnr })
 
 	vim.api.nvim_buf_set_name(bufnr, name)
 
@@ -295,7 +351,11 @@ end
 ---@param resource string
 ---@vararg string
 local function assembly_job_definition(opts, resource, ...)
-	local job_definition = { "go", "test", "-count=1", "-timeout=30s" }
+	local job_definition = {}
+
+	for _, flag in ipairs(vim.b[settings_buffer].command_flags) do
+		table.insert(job_definition, flag)
+	end
 
 	if not opts.nonverbose then
 		table.insert(job_definition, "-v")
