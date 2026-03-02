@@ -1,5 +1,5 @@
 local M = {
-	group = "ResultSignGroup"
+	group = "ResultSignGroup",
 }
 
 -- Define a unique sign name

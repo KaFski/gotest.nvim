@@ -9,7 +9,13 @@ local settings_buffer = 0
 local augroup = vim.api.nvim_create_augroup("GoTestAugroup", { clear = true })
 
 M.setup = function(opts)
-	print("Options:", opts)
+	vim.keymap.set("n", "<leader>tf", M.run_test_file, { desc = "Run [T]est [F]ile" })
+	vim.keymap.set("n", "<leader>tp", M.run_test_package, { desc = "Run [T]est [P]ackage " })
+	vim.keymap.set("n", "<leader>tc", M.run_test_under_cursor, { desc = "Run [T]est under [C]ursor " })
+	vim.keymap.set("n", "<leader>tj", M.run_test_json, { desc = "Run [T]est [J]SON" })
+	vim.keymap.set("n", "<leader>tr", M.run_test_rerun, { desc = "Run [T]est [R]erun" })
+	vim.keymap.set("n", "<leader>ta", M.run_test_all, { desc = "Run [T]est [A]ll" })
+	vim.keymap.set("n", "<C-t>", ui.toggle_test_window, { desc = "[T]est [T]oggle Window" })
 
 	settings_buffer = vim.fn.bufnr("GoTest Settings", false)
 	if settings_buffer == -1 then
@@ -47,13 +53,13 @@ function M.setup_autocmds()
 
 			local cmd = vim.api.nvim_buf_get_lines(args.buf, 0, -1, false)
 			vim.b[settings_buffer].command_flags = cmd
-			vim.api.nvim_buf_set_option(args.buf, "modified", false)
+			vim.bo[settings_buffer].modified = false
 		end,
 	})
 end
 
 local outer_buffer = 0
-local last_run_definiton = ""
+local last_run_definition = ""
 local job_id = 0
 
 ---@param line string
@@ -71,7 +77,7 @@ local function find_in_patterns(line, patterns)
 end
 
 local function toggle_command_flags()
-	local new_window = vim.api.nvim_open_win(settings_buffer, true, {
+	vim.api.nvim_open_win(settings_buffer, true, {
 		relative = "editor",
 		row = vim.o.lines,
 		col = vim.o.columns * 0.1,
@@ -281,14 +287,14 @@ local function append(bufnr, lines)
 
 	-- optional autoscroll:
 	local last = vim.api.nvim_buf_line_count(bufnr)
-	vim.api.nvim_win_set_cursor(0, { last, 0 })
+	vim.api.nvim_win_set_cursor(ui.test_window.id, { last, 0 })
 
 	for _, line in ipairs(lines) do
 		table.insert(ui.test_buffer.lines, line)
 	end
 
 	local height = ui.calculate_window_max_height(#ui.test_buffer.lines)
-	vim.api.nvim_win_set_height(0, height)
+	vim.api.nvim_win_set_height(ui.test_window.id, height)
 end
 
 local function place_sign_column(line, result)
@@ -422,7 +428,7 @@ M.run_test_file = function(opts)
 	local job = table.concat(job_definition, " ") .. " -run='(" .. table.concat(file_tests, "|") .. ")'"
 	print("jobstart", job)
 
-	last_run_definiton = job
+	last_run_definition = job
 
 	job_id = vim.fn.jobstart(job, print_output_opts("GoTestFile"))
 end
@@ -430,9 +436,9 @@ end
 M.run_test_rerun = function()
 	ui.clean_opened_buffers()
 
-	print("jobstart", last_run_definiton)
+	print("jobstart", last_run_definition)
 
-	job_id = vim.fn.jobstart(last_run_definiton, print_output_opts("GoTestRerun"))
+	job_id = vim.fn.jobstart(last_run_definition, print_output_opts("GoTestRerun"))
 end
 
 M.run_test_under_cursor = function(opts)
@@ -462,7 +468,7 @@ M.run_test_under_cursor = function(opts)
 	local job = table.concat(job_definition, " ") .. " -run='" .. test.name .. "'"
 	print("jobstart", job)
 
-	last_run_definiton = job
+	last_run_definition = job
 
 	job_id = vim.fn.jobstart(job, print_output_opts("GoTestFunction"))
 end
@@ -484,13 +490,5 @@ end
 M.cleanup = function()
 	ui.clean_opened_buffers()
 end
-
-vim.keymap.set("n", "<leader>tf", M.run_test_file, { desc = "Run [T]est [F]ile" })
-vim.keymap.set("n", "<leader>tp", M.run_test_package, { desc = "Run [T]est [P]ackage " })
-vim.keymap.set("n", "<leader>tc", M.run_test_under_cursor, { desc = "Run [T]est under [C]ursor " })
-vim.keymap.set("n", "<leader>tj", M.run_test_json, { desc = "Run [T]est [J]SON" })
-vim.keymap.set("n", "<leader>tr", M.run_test_rerun, { desc = "Run [T]est [R]erun" })
-vim.keymap.set("n", "<leader>ta", M.run_test_all, { desc = "Run [T]est [A]ll" })
-vim.keymap.set("n", "<C-t>", ui.toggle_test_window, { desc = "[T]est [T]oggle Window" })
 
 return M

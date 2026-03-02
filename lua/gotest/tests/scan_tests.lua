@@ -4,8 +4,8 @@ local scanner = require("gotest.scan")
 local eq = assert.are.equal
 
 describe("gotest basics", function()
-  it("scan tests", function()
-    local test_content = [[
+	it("scan tests", function()
+		local test_content = [[
 package gotestnvim
 
 import (
@@ -30,17 +30,15 @@ func TestSomethinga(t *testing.T) {
 }
 ]]
 
+		local lines = {}
+		for line in test_content:gmatch("([^\n]+)") do
+			table.insert(lines, line)
+		end
 
-
-    local lines = {}
-    for line in test_content:gmatch("([^\n]+)") do
-      table.insert(lines, line)
-    end
-
-    local tests = scanner.scan_tests(lines)
-    print("tests:", vim.inspect(tests))
-    eq("^TestSomethinga$", tests[6])
-    eq("^TestSomethinga$/test 1$", tests[12])
-    eq("^TestSomethinga$/test 2$", tests[14])
-  end)
+		local tests = scanner.scan_tests(lines)
+		print("tests:", vim.inspect(tests))
+		eq("^TestSomethinga$", tests[6])
+		eq("^TestSomethinga$/test 1$", tests[12])
+		eq("^TestSomethinga$/test 2$", tests[14])
+	end)
 end)
