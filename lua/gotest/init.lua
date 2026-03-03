@@ -36,7 +36,6 @@ M.setup = function(opts)
 		"-timeout=30s",
 		-- "-race",
 	}
-	vim.api.nvim_buf_set_lines(settings_buffer, 0, -1, false, vim.b[settings_buffer].command_flags)
 
 	M.setup_autocmds()
 end
@@ -77,6 +76,7 @@ local function find_in_patterns(line, patterns)
 end
 
 local function toggle_command_flags()
+	vim.api.nvim_buf_set_lines(settings_buffer, 0, -1, false, vim.b[settings_buffer].command_flags)
 	vim.api.nvim_open_win(settings_buffer, true, {
 		relative = "editor",
 		row = vim.o.lines,
